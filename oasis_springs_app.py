@@ -11,8 +11,11 @@ import tempfile
 class ReceiptPDF(FPDF):
     def header(self):
         self.set_font("Arial", 'B', 16)
-        self.image("logo.png", 10, 8, 25)
-        self.cell(0, 10, "Oasis Springs-Order Receipt", ln=True, align="C")
+        try:
+            self.image("logo.png", 10, 8, 25)
+        except:
+            pass
+        self.cell(0, 10, "Oasis Springs - Order Receipt", ln=True, align="C")
         self.ln(10)
 
     def customer_info(self, name, phone, location, maps_link):
@@ -57,10 +60,16 @@ def generate_pdf(name, phone, location, maps_link, order, delivery_fee, grand_to
 
 # ---------- Streamlit App ----------
 st.set_page_config(page_title="Oasis Springs Water Order", layout="centered")
-st.title("💧 Oasis Springs-Water Delivery Order")
+st.title("💧 Oasis Springs - Water Delivery Order")
 
-logo = Image.open("logo.png")
-st.image(logo, width=150)
+# Safe logo load with fallback
+try:
+    logo = Image.open("logo.png")
+    st.image(logo, width=150)
+except FileNotFoundError:
+    st.warning("⚠️ Logo not found. Please upload 'logo.png' to your GitHub repo.")
+
+# Slogan
 st.markdown('<h4 style="color:skyblue;"><em><strong>Every sip, a life boost</strong></em></h4>', unsafe_allow_html=True)
 
 # Customer Info
@@ -107,7 +116,7 @@ grand_total = subtotal + delivery_fee
 st.subheader(f"💰 Total: Ksh {grand_total:,}")
 
 # M-PESA fallback
-st.markdown("📱 **If STK Push Fails-Pay Manually**")
+st.markdown("📱 **If STK Push Fails - Pay Manually**")
 st.code(f"Paybill: 400200\nAccount: 806312\nAmount: Ksh {grand_total}")
 
 # Save orders to CSV
