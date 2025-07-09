@@ -6,8 +6,31 @@ import requests
 from PIL import Image
 from fpdf import FPDF
 import tempfile
+from twilio.rest import Client
 
-# ---------- PDF Receipt Class ----------
+# ----------------- TWILIO CONFIG -----------------
+TWILIO_ACCOUNT_SID = "your_account_sid_here"
+TWILIO_AUTH_TOKEN = "your_auth_token_here"
+TWILIO_WHATSAPP_FROM = "whatsapp:+14155238886"
+TO_WHATSAPP_NUMBER = "whatsapp:+254710708096"
+
+def send_whatsapp_message(name, location, order, total):
+    try:
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        items = "\n".join([f"- {p} x{q}" for p, (q, _) in order.items()])
+        message_body = (
+            f"🧾 New Oasis Springs Order\n\n"
+            f"👤 {name}\n📍 {location}\n🥴 Items:\n{items}\n💰 Total: Ksh {total:,}"
+        )
+        client.messages.create(
+            body=message_body,
+            from_=TWILIO_WHATSAPP_FROM,
+            to=TO_WHATSAPP_NUMBER
+        )
+    except Exception as e:
+        print("WhatsApp Error:", e)
+
+# ----------------- PDF Receipt -----------------
 class ReceiptPDF(FPDF):
     def header(self):
         self.set_font("Arial", 'B', 16)
@@ -58,22 +81,19 @@ def generate_pdf(name, phone, location, maps_link, order, delivery_fee, grand_to
     pdf.output(tmp_path)
     return tmp_path
 
-# ---------- Streamlit App ----------
+# ----------------- Streamlit App -----------------
 st.set_page_config(page_title="Oasis Springs Water Order", layout="centered")
 st.title("💧 Oasis Springs - Water Delivery Order")
 
-# Safe logo load with fallback
 try:
     logo = Image.open("logo.png")
     st.image(logo, width=150)
 except FileNotFoundError:
     st.warning("⚠️ Logo not found. Please upload 'logo.png' to your GitHub repo.")
 
-# Slogan
 st.markdown('<h4 style="color:skyblue;"><em><strong>Every sip, a life boost</strong></em></h4>', unsafe_allow_html=True)
 
-# Customer Info
-st.header("🧍 Customer Details")
+st.header("🧝 Customer Details")
 name = st.text_input("Full Name")
 phone = st.text_input("Phone Number")
 mpesa_number = st.text_input("M-PESA Number (format: 2547XXXXXXXX)")
@@ -81,7 +101,6 @@ location = st.selectbox("Delivery Location", ["Select", "Bamburi", "Nyali"])
 maps_link = st.text_input("📍 Google Maps Pin (Optional)", placeholder="Paste Google Maps link here")
 delivery_fee = 100 if location == "Bamburi" else 200 if location == "Nyali" else 0
 
-# Product Pricing
 prices = {
     "20L Bottle": 150,
     "10L Bottle": 70,
@@ -90,8 +109,7 @@ prices = {
     "0.5L Bottle": 15,
 }
 
-# Product Selection
-st.header("🧴 Select Products")
+st.header("🦴 Select Products")
 order = {}
 total_items = 0
 subtotal = 0
@@ -103,7 +121,6 @@ for product, price in prices.items():
         subtotal += price * qty
         total_items += qty
 
-# Summary
 st.markdown("---")
 st.subheader("🧾 Order Summary")
 for product, (qty, total) in order.items():
@@ -115,11 +132,9 @@ if location != "Select":
 grand_total = subtotal + delivery_fee
 st.subheader(f"💰 Total: Ksh {grand_total:,}")
 
-# M-PESA fallback
 st.markdown("📱 **If STK Push Fails - Pay Manually**")
 st.code(f"Paybill: 400200\nAccount: 806312\nAmount: Ksh {grand_total}")
 
-# Save orders to CSV
 def save_order(data, filename="orders.csv"):
     df = pd.DataFrame([data])
     if os.path.exists(filename):
@@ -127,7 +142,6 @@ def save_order(data, filename="orders.csv"):
         df = pd.concat([existing, df], ignore_index=True)
     df.to_csv(filename, index=False)
 
-# STK Push request
 def send_stk_push(phone, amount):
     try:
         r = requests.post("http://localhost:5000/stk_push", json={
@@ -138,7 +152,6 @@ def send_stk_push(phone, amount):
     except Exception as e:
         return {"error": str(e)}
 
-# Confirm and process order
 if st.button("✅ Confirm Order and Send M-PESA Prompt"):
     if not name or not phone or not mpesa_number or location == "Select" or total_items == 0:
         st.warning("Fill all required fields.")
@@ -159,7 +172,6 @@ if st.button("✅ Confirm Order and Send M-PESA Prompt"):
         if maps_link:
             st.info(f"Delivery pin: {maps_link}")
 
-        # STK Push
         response = send_stk_push(mpesa_number, grand_total)
         if "error" in response:
             st.error("STK Push failed: " + response["error"])
@@ -169,7 +181,6 @@ if st.button("✅ Confirm Order and Send M-PESA Prompt"):
             st.warning("⚠️ STK Push request failed. Use manual Paybill.")
             st.json(response)
 
-        # Generate and allow PDF download
         pdf_path = generate_pdf(name, phone, location, maps_link, order, delivery_fee, grand_total)
         with open(pdf_path, "rb") as f:
             st.download_button(
@@ -179,12 +190,12 @@ if st.button("✅ Confirm Order and Send M-PESA Prompt"):
                 mime="application/pdf"
             )
 
-# Footer
+        send_whatsapp_message(name, location, order, grand_total)
+
 st.markdown("---")
 st.markdown('<h3 style="color:skyblue;"><em><strong>EVERY SIP, A LIFE BOOST</strong></em></h3>', unsafe_allow_html=True)
 st.markdown("📞 For inquiries call: **0710708096** or **0113436073**")
-whatsapp_number = "0113436073"
-whatsapp_link = f"https://wa.me/254{whatsapp_number[1:]}"
+whatsapp_link = "https://wa.me/254113436073"
 st.markdown(f"""
 <a href="{whatsapp_link}" target="_blank">
     <img src="https://img.icons8.com/color/48/000000/whatsapp--v1.png" width="24"/>
